@@ -11,46 +11,34 @@ import (
 	"GoMonitoring/snmp"
 )
 
+// -----------------------------
+// PING
+// -----------------------------
 func pingHost(ip string) bool {
-
-	cmd := exec.Command(
-		"ping",
-		"-c", "1",
-		"-W", "1",
-		ip,
-	)
-
+	cmd := exec.Command("ping", "-c", "1", "-W", "1", ip)
 	return cmd.Run() == nil
 }
 
+// -----------------------------
+// HOSTNAME
+// -----------------------------
 func getHostname(ip string) string {
-
 	names, err := net.LookupAddr(ip)
-
 	if err != nil || len(names) == 0 {
-
 		return ""
 	}
-
-	return names[0]
+	return strings.TrimSuffix(names[0], ".")
 }
 
+// -----------------------------
+// MAC ADDRESS (SAFE VERSION)
+// -----------------------------
 func getMac(ip string) string {
 
-	exec.Command(
-		"ping",
-		"-c",
-		"1",
-		ip,
-	).Run()
+	// ARP table fill qilish uchun ping
+	_ = exec.Command("ping", "-c", "1", ip).Run()
 
-	cmd := exec.Command(
-		"ip",
-		"neigh",
-		"show",
-		ip,
-	)
-
+	cmd := exec.Command("ip", "neigh", "show", ip)
 	output, err := cmd.Output()
 
 	if err != nil {
@@ -58,101 +46,91 @@ func getMac(ip string) string {
 	}
 
 	line := string(output)
+	if line == "" {
+		return ""
+	}
 
 	fields := strings.Fields(line)
 
-	for i, field := range fields {
+	for i, f := range fields {
+		if f == "lladdr" && i+1 < len(fields) {
+			mac := fields[i+1]
 
-		if field == "lladdr" {
-
-			if len(fields) > i+1 {
-
-				return fields[i+1]
+			// basic validation
+			if mac == "" || mac == "00:00:00:00:00:00" {
+				return ""
 			}
+
+			return mac
 		}
 	}
 
 	return ""
 }
 
-func ScanNetwork(
-	network string,
-) []models.Device {
+// -----------------------------
+// SCAN NETWORK
+// -----------------------------
+func ScanNetwork(network string) []models.Device {
 
 	var devices []models.Device
 
 	var wg sync.WaitGroup
-
 	var mutex sync.Mutex
 
-	baseIP := strings.Replace(
-		network,
-		"0/24",
-		"",
-		1,
-	)
+	baseIP := strings.Replace(network, "0/24", "", 1)
+
+	// LIMIT goroutines (important fix)
+	sem := make(chan struct{}, 50)
 
 	for i := 1; i <= 254; i++ {
 
-		ip := fmt.Sprintf(
-			"%s%d",
-			baseIP,
-			i,
-		)
+		ip := fmt.Sprintf("%s%d", baseIP, i)
 
 		wg.Add(1)
 
 		go func(ip string) {
-
 			defer wg.Done()
 
-			fmt.Println(
-				"Checking:",
-				ip,
-			)
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
-			if pingHost(ip) {
+			fmt.Println("Checking:", ip)
 
-				mac := getMac(ip)
-
-				hostname := getHostname(ip)
-
-				systemName,
-					systemDescription,
-					snmpEnabled :=
-					snmp.GetSNMPInfo(ip)
-
-				device := models.Device{
-
-					IP: ip,
-
-					MAC: mac,
-
-					Hostname: hostname,
-
-					SystemName: systemName,
-
-					SystemDescription: systemDescription,
-
-					SNMPEnabled: snmpEnabled,
-
-					SNMPVersion: "2c",
-				}
-
-				mutex.Lock()
-
-				devices = append(
-					devices,
-					device,
-				)
-
-				mutex.Unlock()
-
-				fmt.Println(
-					"FOUND:",
-					ip,
-				)
+			// 1. Ping check
+			if !pingHost(ip) {
+				return
 			}
+
+			// 2. MAC (critical fix)
+			mac := getMac(ip)
+
+			// ❗ IMPORTANT: MAC bo‘sh bo‘lsa SKIP
+			if mac == "" {
+				fmt.Println("SKIP (no MAC):", ip)
+				return
+			}
+
+			hostname := getHostname(ip)
+
+			systemName, systemDescription, snmpEnabled :=
+				snmp.GetSNMPInfo(ip)
+
+			device := models.Device{
+				IP:                ip,
+				MAC:               mac,
+				Hostname:          hostname,
+				SystemName:        systemName,
+				SystemDescription: systemDescription,
+				SNMPEnabled:       snmpEnabled,
+				SNMPVersion:       "2c",
+			}
+
+			mutex.Lock()
+			devices = append(devices, device)
+			mutex.Unlock()
+
+			fmt.Println("FOUND:", ip)
 
 		}(ip)
 	}
