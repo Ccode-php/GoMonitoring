@@ -9,7 +9,7 @@ import (
 	"GoMonitoring/models"
 )
 
-const API_URL = "http://Laravel13Monitoring:8000/api"
+const API_URL = "http://laravel:8000/api"
 
 const TOKEN = "8xK92Lm@pQ!2026"
 
