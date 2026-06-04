@@ -9,7 +9,7 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o scanner .
+RUN go build -o app .
 
 FROM ubuntu:24.04
 
@@ -21,6 +21,6 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/scanner /scanner
+COPY --from=builder /app/app /usr/local/bin/app
 
-CMD ["/scanner"]
+CMD ["/usr/local/bin/app"]
