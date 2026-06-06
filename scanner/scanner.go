@@ -74,14 +74,10 @@ func getMac(ip string) string {
 func ScanNetwork(network string) []models.Device {
 
 	var devices []models.Device
-
 	var wg sync.WaitGroup
 	var mutex sync.Mutex
 
 	baseIP := strings.Replace(network, "0/24", "", 1)
-
-	// LIMIT goroutines (important fix)
-	sem := make(chan struct{}, 50)
 
 	for i := 1; i <= 254; i++ {
 
@@ -92,20 +88,13 @@ func ScanNetwork(network string) []models.Device {
 		go func(ip string) {
 			defer wg.Done()
 
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			fmt.Println("Checking:", ip)
-
-			// 1. Ping check
 			if !pingHost(ip) {
 				return
 			}
 
-			// 2. MAC (critical fix)
 			mac := getMac(ip)
 
-			// ❗ IMPORTANT: MAC bo‘sh bo‘lsa SKIP
+			// 🔥 CRITICAL FIX
 			if mac == "" {
 				fmt.Println("SKIP (no MAC):", ip)
 				return
