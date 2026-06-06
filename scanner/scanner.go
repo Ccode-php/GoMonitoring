@@ -96,8 +96,7 @@ func ScanNetwork(network string) []models.Device {
 
 			// 🔥 CRITICAL FIX
 			if mac == "" {
-				fmt.Println("SKIP (no MAC):", ip)
-				return
+				mac = "UNKNOWN"
 			}
 
 			hostname := getHostname(ip)
