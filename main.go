@@ -10,62 +10,57 @@ import (
 
 func main() {
 
+	fmt.Println("Go Monitoring Scanner Started")
+
 	for {
 
-		networks, err :=
-			api.GetNetworks()
+		networks, err := api.GetNetworks()
 
 		if err != nil {
 
-			fmt.Println(
-				"API ERROR:",
-				err,
-			)
+			fmt.Println("API ERROR:", err)
 
-			time.Sleep(
-				time.Minute,
-			)
+			time.Sleep(time.Minute)
+
+			continue
+		}
+
+		if len(networks) == 0 {
+
+			fmt.Println("No networks to scan")
+
+			time.Sleep(time.Minute)
 
 			continue
 		}
 
 		for _, network := range networks {
 
-			fmt.Println(
-				"SCAN:",
-				network.Network,
-			)
+			fmt.Println("--------------------------------")
+			fmt.Println("Scanning:", network.Network)
 
-			devices :=
-				scanner.ScanNetwork(
-					network.Network,
-				)
+			devices := scanner.ScanNetwork(network.Network)
 
-			fmt.Println(
-				"FOUND:",
-				len(devices),
-			)
+			fmt.Printf("Found %d device(s)\n", len(devices))
 
-			err :=
-				api.SendDevices(
-					devices,
-				)
-
-			if err != nil {
-
-				fmt.Println(
-					"SEND ERROR:",
-					err,
-				)
+			if len(devices) == 0 {
+				continue
 			}
+
+			if err := api.SendDevices(devices); err != nil {
+
+				fmt.Println("SEND ERROR:", err)
+
+				continue
+			}
+
+			fmt.Println("Devices sent successfully")
 		}
 
-		fmt.Println(
-			"WAIT 60 SECONDS",
-		)
+		fmt.Println("--------------------------------")
+		fmt.Println("Waiting 60 seconds...")
+		fmt.Println()
 
-		time.Sleep(
-			time.Minute,
-		)
+		time.Sleep(time.Minute)
 	}
 }

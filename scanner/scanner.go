@@ -8,56 +8,52 @@ import (
 	"sync"
 
 	"GoMonitoring/models"
-	"GoMonitoring/snmp"
 )
 
-// -----------------------------
-// PING
-// -----------------------------
 func pingHost(ip string) bool {
+
 	cmd := exec.Command("ping", "-c", "1", "-W", "1", ip)
+
 	return cmd.Run() == nil
 }
 
-// -----------------------------
-// HOSTNAME
-// -----------------------------
 func getHostname(ip string) string {
+
 	names, err := net.LookupAddr(ip)
+
 	if err != nil || len(names) == 0 {
 		return ""
 	}
+
 	return strings.TrimSuffix(names[0], ".")
 }
 
-// -----------------------------
-// MAC ADDRESS (SAFE VERSION)
-// -----------------------------
 func getMac(ip string) string {
 
-	// ARP table fill qilish uchun ping
 	_ = exec.Command("ping", "-c", "1", ip).Run()
 
-	cmd := exec.Command("ip", "neigh", "show", ip)
-	output, err := cmd.Output()
+	output, err := exec.Command(
+		"ip",
+		"neigh",
+		"show",
+		ip,
+	).Output()
 
 	if err != nil {
 		return ""
 	}
 
-	line := string(output)
-	if line == "" {
-		return ""
-	}
+	fields := strings.Fields(string(output))
 
-	fields := strings.Fields(line)
+	for i, field := range fields {
 
-	for i, f := range fields {
-		if f == "lladdr" && i+1 < len(fields) {
-			mac := fields[i+1]
+		if field == "lladdr" && i+1 < len(fields) {
 
-			// basic validation
-			if mac == "" || mac == "00:00:00:00:00:00" {
+			mac := strings.ToUpper(fields[i+1])
+
+			if mac == "" ||
+				mac == "00:00:00:00:00:00" {
+
 				return ""
 			}
 
@@ -68,16 +64,15 @@ func getMac(ip string) string {
 	return ""
 }
 
-// -----------------------------
-// SCAN NETWORK
-// -----------------------------
 func ScanNetwork(network string) []models.Device {
 
-	var devices []models.Device
-	var wg sync.WaitGroup
-	var mutex sync.Mutex
+	var (
+		devices []models.Device
+		wg      sync.WaitGroup
+		mutex   sync.Mutex
+	)
 
-	baseIP := strings.Replace(network, "0/24", "", 1)
+	baseIP := strings.TrimSuffix(network, "0/24")
 
 	for i := 1; i <= 254; i++ {
 
@@ -86,6 +81,7 @@ func ScanNetwork(network string) []models.Device {
 		wg.Add(1)
 
 		go func(ip string) {
+
 			defer wg.Done()
 
 			if !pingHost(ip) {
@@ -94,32 +90,31 @@ func ScanNetwork(network string) []models.Device {
 
 			mac := getMac(ip)
 
-			// 🔥 CRITICAL FIX
 			if mac == "" {
-				fmt.Println("SKIP (no MAC):", ip)
 				return
 			}
 
-			hostname := getHostname(ip)
-
-			systemName, systemDescription, snmpEnabled :=
-				snmp.GetSNMPInfo(ip)
-
 			device := models.Device{
-				IP:                ip,
-				MAC:               mac,
-				Hostname:          hostname,
-				SystemName:        systemName,
-				SystemDescription: systemDescription,
-				SNMPEnabled:       snmpEnabled,
-				SNMPVersion:       "2c",
+
+				IP: ip,
+
+				MAC: mac,
 			}
 
 			mutex.Lock()
-			devices = append(devices, device)
+
+			devices = append(
+				devices,
+				device,
+			)
+
 			mutex.Unlock()
 
-			fmt.Println("FOUND:", ip)
+			fmt.Printf(
+				"FOUND %-15s %s\n",
+				ip,
+				mac,
+			)
 
 		}(ip)
 	}
