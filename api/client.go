@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	//APIURL = "http://10.43.60.110:8000/api"
-	APIURL = "http://127.0.0.1:8000/api"
+	APIURL = "http://10.43.60.110:8000/api"
 	Token  = "8xK92Lm@pQ!2026"
 )
 
