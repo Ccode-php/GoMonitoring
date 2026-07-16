@@ -14,7 +14,7 @@ func main() {
 
 	for {
 
-		networks, err := api.GetNetworks()
+		tasks, err := api.GetNetworks()
 
 		if err != nil {
 
@@ -25,7 +25,7 @@ func main() {
 			continue
 		}
 
-		if len(networks) == 0 {
+		if len(tasks) == 0 {
 
 			fmt.Println("No networks to scan")
 
@@ -34,27 +34,27 @@ func main() {
 			continue
 		}
 
-		for _, network := range networks {
+		for _, task := range tasks {
 
 			fmt.Println("--------------------------------")
-			fmt.Println("Scanning:", network.Network)
+			fmt.Println("Scanning:", task.Network)
 
-			devices := scanner.ScanNetwork(network.Network)
+			result := scanner.Scan(task.Network)
 
-			fmt.Printf("Found %d device(s)\n", len(devices))
+			fmt.Printf(
+				"Devices: %d | Switches: %d\n",
+				len(result.Devices),
+				len(result.Switches),
+			)
 
-			if len(devices) == 0 {
-				continue
-			}
-
-			if err := api.SendDevices(devices); err != nil {
+			if err := api.Send(result); err != nil {
 
 				fmt.Println("SEND ERROR:", err)
 
 				continue
 			}
 
-			fmt.Println("Devices sent successfully")
+			fmt.Println("Scan completed")
 		}
 
 		fmt.Println("--------------------------------")

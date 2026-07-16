@@ -10,29 +10,49 @@ import (
 	"GoMonitoring/models"
 )
 
-func pingHost(ip string) bool {
+// Ping
+func ping(ip string) bool {
 
-	cmd := exec.Command("ping", "-c", "1", "-W", "1", ip)
+	cmd := exec.Command(
+		"ping",
+		"-c",
+		"1",
+		"-W",
+		"1",
+		ip,
+	)
 
 	return cmd.Run() == nil
 }
 
+// Hostname
 func getHostname(ip string) string {
 
 	names, err := net.LookupAddr(ip)
 
 	if err != nil || len(names) == 0 {
+
 		return ""
+
 	}
 
-	return strings.TrimSuffix(names[0], ".")
+	return strings.TrimSuffix(
+		names[0],
+		".",
+	)
 }
 
-func getMac(ip string) string {
+// MAC Address
+func getMAC(ip string) string {
 
-	_ = exec.Command("ping", "-c", "1", ip).Run()
+	_ = exec.Command(
+		"ping",
+		"-c",
+		"1",
+		ip,
+	).Run()
 
-	output, err := exec.Command(
+	out, err := exec.Command(
 		"ip",
 		"neigh",
 		"show",
@@ -40,43 +60,82 @@ func getMac(ip string) string {
 	).Output()
 
 	if err != nil {
+
 		return ""
+
 	}
 
-	fields := strings.Fields(string(output))
+	fields := strings.Fields(string(out))
 
-	for i, field := range fields {
+	for i := 0; i < len(fields); i++ {
 
-		if field == "lladdr" && i+1 < len(fields) {
+		if fields[i] == "lladdr" {
 
-			mac := strings.ToUpper(fields[i+1])
+			if i+1 < len(fields) {
 
-			if mac == "" ||
-				mac == "00:00:00:00:00:00" {
+				return strings.ToUpper(
+					fields[i+1],
+				)
 
-				return ""
 			}
 
-			return mac
 		}
+
 	}
 
 	return ""
 }
 
-func ScanNetwork(network string) []models.Device {
+// Bitta hostni scan qilish
+func scanHost(ip string) *models.Device {
 
-	var (
-		devices []models.Device
-		wg      sync.WaitGroup
-		mutex   sync.Mutex
+	if !ping(ip) {
+
+		return nil
+
+	}
+
+	device := &models.Device{
+
+		IP: ip,
+
+		MAC: getMAC(ip),
+
+		Hostname: getHostname(ip),
+
+		IsSwitch: false,
+	}
+
+	if device.MAC == "" {
+
+		return nil
+
+	}
+
+	return device
+}
+
+// Network Scan
+func Scan(network string) models.ScanResult {
+
+	var result models.ScanResult
+
+	var wg sync.WaitGroup
+
+	var mutex sync.Mutex
+
+	base := strings.TrimSuffix(
+		network,
+		"0/24",
 	)
-
-	baseIP := strings.TrimSuffix(network, "0/24")
 
 	for i := 1; i <= 254; i++ {
 
-		ip := fmt.Sprintf("%s%d", baseIP, i)
+		ip := fmt.Sprintf(
+			"%s%d",
+			base,
+			i,
+		)
 
 		wg.Add(1)
 
@@ -84,36 +143,44 @@ func ScanNetwork(network string) []models.Device {
 
 			defer wg.Done()
 
-			if !pingHost(ip) {
+			device := scanHost(ip)
+
+			if device == nil {
+
 				return
+
 			}
 
-			mac := getMac(ip)
+			// SNMP orqali switchni tekshirish
+			sw, ok := GetSwitchInfo(ip)
 
-			if mac == "" {
-				return
-			}
+			if ok {
 
-			device := models.Device{
+				device.IsSwitch = true
 
-				IP: ip,
+				mutex.Lock()
 
-				MAC: mac,
+				result.Switches = append(
+					result.Switches,
+					sw,
+				)
+
+				mutex.Unlock()
 			}
 
 			mutex.Lock()
 
-			devices = append(
-				devices,
-				device,
+			result.Devices = append(
+				result.Devices,
+				*device,
 			)
 
 			mutex.Unlock()
 
 			fmt.Printf(
 				"FOUND %-15s %s\n",
-				ip,
-				mac,
+				device.IP,
+				device.MAC,
 			)
 
 		}(ip)
@@ -121,5 +188,5 @@ func ScanNetwork(network string) []models.Device {
 
 	wg.Wait()
 
-	return devices
+	return result
 }

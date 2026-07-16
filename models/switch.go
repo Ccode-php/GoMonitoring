@@ -1,9 +1,9 @@
 package models
 
-type Device struct {
+type Switch struct {
 	IP       string `json:"ip"`
 	MAC      string `json:"mac"`
 	Hostname string `json:"hostname"`
 
-	IsSwitch bool `json:"is_switch"`
+	Ports []Port `json:"ports"`
 }
