@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	//APIURL = "http://10.43.60.110:8000/api"
-	API_URL = "http://laravel:8000/api"
+	//API_URL = "http://laravel:8000/api"
+	API_URL = "http://10.43.60.110:8000/api"
 	Token   = "8xK92Lm@pQ!2026"
 )
 
