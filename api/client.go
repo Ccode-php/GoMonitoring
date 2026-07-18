@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	APIURL = "http://10.43.60.110:8000/api"
-	Token  = "8xK92Lm@pQ!2026"
+	//APIURL = "http://10.43.60.110:8000/api"
+	API_URL = "http://laravel:8000/api"
+	Token   = "8xK92Lm@pQ!2026"
 )
 
 type ScanTask struct {
@@ -32,7 +33,7 @@ func GetNetworks() ([]ScanTask, error) {
 
 	req, err := http.NewRequest(
 		http.MethodGet,
-		APIURL+"/scan-tasks/pending",
+		API_URL+"/scan-tasks/pending",
 		nil,
 	)
 
@@ -68,7 +69,7 @@ func Send(result models.ScanResult) error {
 
 	req, err := http.NewRequest(
 		http.MethodPost,
-		APIURL+"/scanner/report-batch",
+		API_URL+"/scanner/report-batch",
 		bytes.NewBuffer(body),
 	)
 
