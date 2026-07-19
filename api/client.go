@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"GoMonitoring/models"
 )
 
-const (
-	//API_URL = "http://laravel:8000/api"
-	API_URL = "http://10.43.60.110:8000/api"
-	Token   = "8xK92Lm@pQ!2026"
+var (
+	API_URL = os.Getenv("API_URL")
+
+	Token = os.Getenv("SCANNER_TOKEN")
 )
 
 type ScanTask struct {

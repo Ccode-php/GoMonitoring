@@ -2,15 +2,29 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"time"
 
 	"GoMonitoring/api"
 	"GoMonitoring/scanner"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
 
+	_ = godotenv.Load()
+
 	fmt.Println("Go Monitoring Scanner Started")
+
+	interval, err := strconv.Atoi(
+		os.Getenv("SCAN_INTERVAL"),
+	)
+
+	if err != nil || interval <= 0 {
+		interval = 60
+	}
 
 	for {
 
@@ -20,47 +34,28 @@ func main() {
 
 			fmt.Println("API ERROR:", err)
 
-			time.Sleep(time.Minute)
-
-			continue
-		}
-
-		if len(tasks) == 0 {
-
-			fmt.Println("No networks to scan")
-
-			time.Sleep(time.Minute)
+			time.Sleep(
+				time.Duration(interval) * time.Second,
+			)
 
 			continue
 		}
 
 		for _, task := range tasks {
 
-			fmt.Println("--------------------------------")
-			fmt.Println("Scanning:", task.Network)
-
 			result := scanner.Scan(task.Network)
-
-			fmt.Printf(
-				"Devices: %d | Switches: %d\n",
-				len(result.Devices),
-				len(result.Switches),
-			)
 
 			if err := api.Send(result); err != nil {
 
-				fmt.Println("SEND ERROR:", err)
+				fmt.Println(err)
 
-				continue
 			}
 
-			fmt.Println("Scan completed")
 		}
 
-		fmt.Println("--------------------------------")
-		fmt.Println("Waiting 60 seconds...")
-		fmt.Println()
+		time.Sleep(
+			time.Duration(interval) * time.Second,
+		)
 
-		time.Sleep(time.Minute)
 	}
 }

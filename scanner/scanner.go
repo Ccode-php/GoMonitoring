@@ -118,7 +118,10 @@ func scanHost(ip string) *models.Device {
 // Network Scan
 func Scan(network string) models.ScanResult {
 
-	var result models.ScanResult
+	result := models.ScanResult{
+		Devices:  make([]models.Device, 0),
+		Switches: make([]models.Switch, 0),
+	}
 
 	var wg sync.WaitGroup
 
