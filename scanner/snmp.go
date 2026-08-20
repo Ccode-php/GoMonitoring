@@ -31,27 +31,61 @@ const (
 
 func connect(ip string) (*gosnmp.GoSNMP, error) {
 
+	cfg := GetConfig()
+
+	version := gosnmp.Version2c
+
+	switch cfg.SNMPVersion {
+
+	case "v1":
+		version = gosnmp.Version1
+
+	case "v2c":
+		version = gosnmp.Version2c
+
+	default:
+		version = gosnmp.Version2c
+	}
+
+	timeout := cfg.SNMPTimeout
+
+	if timeout <= 0 {
+		timeout = 2
+	}
+
+	retries := cfg.SNMPRetries
+
+	if retries < 0 {
+		retries = 1
+	}
+
+	community := cfg.SNMPCommunity
+
+	if community == "" {
+		community = "public"
+	}
+
 	g := &gosnmp.GoSNMP{
 
 		Target: ip,
 
 		Port: 161,
 
-		Community: "public",
+		Community: community,
 
-		Version: gosnmp.Version2c,
+		Version: version,
 
-		Timeout: 2 * time.Second,
+		Timeout: time.Duration(
+			timeout,
+		) * time.Second,
 
-		Retries: 1,
+		Retries: retries,
 	}
 
 	err := g.Connect()
 
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	return g, nil

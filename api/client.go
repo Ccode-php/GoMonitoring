@@ -11,16 +11,29 @@ import (
 	"GoMonitoring/models"
 )
 
-var (
-	API_URL = os.Getenv("API_URL")
+func getAPIURL() string {
+	return os.Getenv("API_URL")
+}
 
-	Token = os.Getenv("SCANNER_TOKEN")
-)
+func getToken() string {
+	return os.Getenv("SCANNER_TOKEN")
+}
 
 type ScanTask struct {
 	ID      int    `json:"id"`
 	Network string `json:"network"`
 	Enabled bool   `json:"enabled"`
+}
+
+type ScannerConfig struct {
+	ScanInterval      int    `json:"scan_interval"`
+	OfflineTimeout    int    `json:"offline_timeout"`
+	NotificationSound bool   `json:"notification_sound"`
+	AutoRefresh       bool   `json:"auto_refresh"`
+	SNMPCommunity     string `json:"snmp_community"`
+	SNMPVersion       string `json:"snmp_version"`
+	SNMPTimeout       int    `json:"snmp_timeout"`
+	SNMPRetries       int    `json:"snmp_retries"`
 }
 
 func client() *http.Client {
@@ -34,13 +47,19 @@ func GetNetworks() ([]ScanTask, error) {
 
 	req, err := http.NewRequest(
 		http.MethodGet,
-		API_URL+"/scan-tasks/pending",
+		getAPIURL()+"/scan-tasks/pending",
 		nil,
 	)
 
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(
+		"X-SCANNER-TOKEN",
+		getToken(),
+	)
 
 	resp, err := client().Do(req)
 
@@ -59,6 +78,50 @@ func GetNetworks() ([]ScanTask, error) {
 	return tasks, nil
 }
 
+// Laravel'dan scanner konfiguratsiyasini oladi
+func GetConfig() (ScannerConfig, error) {
+
+	var config ScannerConfig
+
+	req, err := http.NewRequest(
+		http.MethodGet,
+		getAPIURL()+"/scanner/config",
+		nil,
+	)
+
+	if err != nil {
+		return config, err
+	}
+
+	req.Header.Set(
+		"X-SCANNER-TOKEN",
+		getToken(),
+	)
+
+	resp, err := client().Do(req)
+
+	if err != nil {
+		return config, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return config, fmt.Errorf(
+			"config API returned %s",
+			resp.Status,
+		)
+	}
+
+	if err := json.NewDecoder(
+		resp.Body,
+	).Decode(&config); err != nil {
+		return config, err
+	}
+
+	return config, nil
+}
+
 // Scan natijasini Laravelga yuboradi
 func Send(result models.ScanResult) error {
 
@@ -70,7 +133,7 @@ func Send(result models.ScanResult) error {
 
 	req, err := http.NewRequest(
 		http.MethodPost,
-		API_URL+"/scanner/report-batch",
+		getAPIURL()+"/scanner/report-batch",
 		bytes.NewBuffer(body),
 	)
 
@@ -79,7 +142,10 @@ func Send(result models.ScanResult) error {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-SCANNER-TOKEN", Token)
+	req.Header.Set(
+		"X-SCANNER-TOKEN",
+		getToken(),
+	)
 
 	resp, err := client().Do(req)
 

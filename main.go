@@ -2,8 +2,7 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"strconv"
+	"log"
 	"time"
 
 	"GoMonitoring/api"
@@ -14,28 +13,55 @@ import (
 
 func main() {
 
-	_ = godotenv.Load()
+	err := godotenv.Load()
+
+	if err != nil {
+		log.Println("Warning: .env file not found")
+	}
 
 	fmt.Println("Go Monitoring Scanner Started")
 
-	interval, err := strconv.Atoi(
-		os.Getenv("SCAN_INTERVAL"),
-	)
-
-	if err != nil || interval <= 0 {
-		interval = 60
-	}
-
 	for {
+
+		config, err := api.GetConfig()
+
+		if err != nil {
+
+			fmt.Println(
+				"CONFIG ERROR:",
+				err,
+			)
+
+			time.Sleep(
+				30 * time.Second,
+			)
+
+			continue
+		}
+
+		fmt.Printf(
+			"Scanner config: interval=%ds SNMP=%s timeout=%ds retries=%d\n",
+			config.ScanInterval,
+			config.SNMPVersion,
+			config.SNMPTimeout,
+			config.SNMPRetries,
+		)
+
+		scanner.SetConfig(config)
 
 		tasks, err := api.GetNetworks()
 
 		if err != nil {
 
-			fmt.Println("API ERROR:", err)
+			fmt.Println(
+				"API ERROR:",
+				err,
+			)
 
 			time.Sleep(
-				time.Duration(interval) * time.Second,
+				time.Duration(
+					config.ScanInterval,
+				) * time.Second,
 			)
 
 			continue
@@ -43,19 +69,33 @@ func main() {
 
 		for _, task := range tasks {
 
-			result := scanner.Scan(task.Network)
+			if !task.Enabled {
+				continue
+			}
+
+			fmt.Println(
+				"Scanning:",
+				task.Network,
+			)
+
+			result := scanner.Scan(
+				task.Network,
+			)
 
 			if err := api.Send(result); err != nil {
 
-				fmt.Println(err)
+				fmt.Println(
+					"SEND ERROR:",
+					err,
+				)
 
 			}
-
 		}
 
 		time.Sleep(
-			time.Duration(interval) * time.Second,
+			time.Duration(
+				config.ScanInterval,
+			) * time.Second,
 		)
-
 	}
 }
