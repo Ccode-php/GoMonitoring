@@ -19,6 +19,9 @@ const (
 	// Port nomlari (2-qismda ishlatiladi)
 	oidIfName = ".1.3.6.1.2.1.31.1.1.1.1"
 
+	// Switch / Bridge MAC address
+	oidBridgeAddress = ".1.3.6.1.2.1.17.1.1.0"
+
 	// MAC Table (3-qismda ishlatiladi)
 	oidBridgeMac = ".1.3.6.1.2.1.17.4.3.1.1"
 
@@ -120,6 +123,51 @@ func getSysName(g *gosnmp.GoSNMP) string {
 	return strings.TrimSpace(value)
 }
 
+func getBridgeAddress(g *gosnmp.GoSNMP) string {
+
+	result, err := g.Get([]string{
+		oidBridgeAddress,
+	})
+
+	if err != nil {
+		return ""
+	}
+
+	if len(result.Variables) == 0 {
+		return ""
+	}
+
+	value := result.Variables[0].Value
+
+	var mac []byte
+
+	switch v := value.(type) {
+
+	case []byte:
+		mac = v
+
+	case string:
+		mac = []byte(v)
+
+	default:
+		return ""
+	}
+
+	if len(mac) != 6 {
+		return ""
+	}
+
+	return fmt.Sprintf(
+		"%02X:%02X:%02X:%02X:%02X:%02X",
+		mac[0],
+		mac[1],
+		mac[2],
+		mac[3],
+		mac[4],
+		mac[5],
+	)
+}
+
 func GetSwitchInfo(ip string) (models.Switch, bool) {
 
 	var sw models.Switch
@@ -127,9 +175,7 @@ func GetSwitchInfo(ip string) (models.Switch, bool) {
 	g, err := connect(ip)
 
 	if err != nil {
-
 		return sw, false
-
 	}
 
 	defer g.Conn.Close()
@@ -139,12 +185,18 @@ func GetSwitchInfo(ip string) (models.Switch, bool) {
 	sw.Hostname = getSysName(g)
 
 	if sw.Hostname == "" {
-
 		return sw, false
-
 	}
 
-	fmt.Println("SNMP:", sw.Hostname)
+	// Switchning o'z MAC addressini SNMP orqali olish
+	sw.MAC = getBridgeAddress(g)
+
+	fmt.Printf(
+		"SNMP SWITCH: IP=%s HOSTNAME=%s MAC=%s\n",
+		sw.IP,
+		sw.Hostname,
+		sw.MAC,
+	)
 
 	sw.Ports = getPorts(g)
 

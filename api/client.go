@@ -26,14 +26,11 @@ type ScanTask struct {
 }
 
 type ScannerConfig struct {
-	ScanInterval      int    `json:"scan_interval"`
-	OfflineTimeout    int    `json:"offline_timeout"`
-	NotificationSound bool   `json:"notification_sound"`
-	AutoRefresh       bool   `json:"auto_refresh"`
-	SNMPCommunity     string `json:"snmp_community"`
-	SNMPVersion       string `json:"snmp_version"`
-	SNMPTimeout       int    `json:"snmp_timeout"`
-	SNMPRetries       int    `json:"snmp_retries"`
+	ScanInterval  int    `json:"scan_interval"`
+	SNMPCommunity string `json:"snmp_community"`
+	SNMPVersion   string `json:"snmp_version"`
+	SNMPTimeout   int    `json:"snmp_timeout"`
+	SNMPRetries   int    `json:"snmp_retries"`
 }
 
 func client() *http.Client {
