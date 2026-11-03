@@ -2,23 +2,19 @@ FROM golang:1.26 AS builder
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
-
+COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-
-RUN go build -o app .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o app .
 
 FROM ubuntu:24.04
 
-RUN apt-get update && apt-get install -y \
+# Faqat kerakli paketlar: ping, ip neigh, TLS sertifikatlar.
+# (snmp, snmpd, net-tools kerak emas, snmpd esa keraksiz daemon)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     iproute2 \
     iputils-ping \
-    net-tools \
-    snmp \
-    snmpd \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 

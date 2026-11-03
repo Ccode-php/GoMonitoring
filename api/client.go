@@ -4,20 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"GoMonitoring/models"
 )
-
-func getAPIURL() string {
-	return os.Getenv("API_URL")
-}
-
-func getToken() string {
-	return os.Getenv("SCANNER_TOKEN")
-}
 
 type ScanTask struct {
 	ID      int    `json:"id"`
@@ -33,42 +27,58 @@ type ScannerConfig struct {
 	SNMPRetries   int    `json:"snmp_retries"`
 }
 
-func client() *http.Client {
-	return &http.Client{
-		Timeout: 30 * time.Second,
+// Bitta umumiy client (ulanishlar qayta ishlatiladi)
+var httpClient = &http.Client{Timeout: 60 * time.Second}
+
+func newRequest(method, path string, body io.Reader) (*http.Request, error) {
+	base := strings.TrimRight(os.Getenv("API_URL"), "/")
+
+	req, err := http.NewRequest(method, base+path, body)
+	if err != nil {
+		return nil, err
 	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-SCANNER-TOKEN", os.Getenv("SCANNER_TOKEN"))
+
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	return req, nil
 }
 
-// Laraveldan scan qilinadigan tarmoqlarni oladi
-func GetNetworks() ([]ScanTask, error) {
-
-	req, err := http.NewRequest(
-		http.MethodGet,
-		getAPIURL()+"/scan-tasks/pending",
-		nil,
-	)
-
+// do so'rovni yuboradi, 200 bo'lmasa xato qaytaradi, out != nil bo'lsa JSON'ni dekod qiladi.
+func do(req *http.Request, out any) error {
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(
-		"X-SCANNER-TOKEN",
-		getToken(),
-	)
-
-	resp, err := client().Do(req)
-
-	if err != nil {
-		return nil, err
-	}
-
 	defer resp.Body.Close()
 
-	var tasks []ScanTask
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("%s %s -> %s: %s",
+			req.Method, req.URL.Path, resp.Status, strings.TrimSpace(string(msg)))
+	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&tasks); err != nil {
+	if out == nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil
+	}
+
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// Laravel'dan scan qilinadigan tarmoqlarni oladi
+func GetNetworks() ([]ScanTask, error) {
+	req, err := newRequest(http.MethodGet, "/scan-tasks/pending", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var tasks []ScanTask
+	if err := do(req, &tasks); err != nil {
 		return nil, err
 	}
 
@@ -77,91 +87,28 @@ func GetNetworks() ([]ScanTask, error) {
 
 // Laravel'dan scanner konfiguratsiyasini oladi
 func GetConfig() (ScannerConfig, error) {
+	var cfg ScannerConfig
 
-	var config ScannerConfig
-
-	req, err := http.NewRequest(
-		http.MethodGet,
-		getAPIURL()+"/scanner/config",
-		nil,
-	)
-
+	req, err := newRequest(http.MethodGet, "/scanner/config", nil)
 	if err != nil {
-		return config, err
+		return cfg, err
 	}
 
-	req.Header.Set(
-		"X-SCANNER-TOKEN",
-		getToken(),
-	)
-
-	resp, err := client().Do(req)
-
-	if err != nil {
-		return config, err
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return config, fmt.Errorf(
-			"config API returned %s",
-			resp.Status,
-		)
-	}
-
-	if err := json.NewDecoder(
-		resp.Body,
-	).Decode(&config); err != nil {
-		return config, err
-	}
-
-	return config, nil
+	err = do(req, &cfg)
+	return cfg, err
 }
 
 // Scan natijasini Laravelga yuboradi
 func Send(result models.ScanResult) error {
-
 	body, err := json.Marshal(result)
-
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequest(
-		http.MethodPost,
-		getAPIURL()+"/scanner/report-batch",
-		bytes.NewBuffer(body),
-	)
-
+	req, err := newRequest(http.MethodPost, "/scanner/report-batch", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(
-		"X-SCANNER-TOKEN",
-		getToken(),
-	)
-
-	resp, err := client().Do(req)
-
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-
-		return fmt.Errorf(
-			"laravel returned %s",
-			resp.Status,
-		)
-
-	}
-
-	fmt.Println("Scan result sent.")
-
-	return nil
+	return do(req, nil)
 }
